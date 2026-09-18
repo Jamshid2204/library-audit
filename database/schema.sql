@@ -1,0 +1,87 @@
+create extension if not exists "pgcrypto";
+
+create table if not exists public.profiles (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  full_name text,
+  role text not null default 'admin',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.books (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  author text not null,
+  category text not null default 'Umumiy',
+  quantity integer not null default 0,
+  status text not null default 'Mavjud',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.readers (
+  id uuid primary key default gen_random_uuid(),
+  full_name text not null,
+  class_name text,
+  phone text,
+  debt numeric not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.visits (
+  id uuid primary key default gen_random_uuid(),
+  visitor_name text not null,
+  visit_date date not null,
+  purpose text not null,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  event_date date,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.reports (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  report_type text not null default 'Umumiy',
+  report_date date not null default current_date,
+  data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+alter table public.books enable row level security;
+alter table public.readers enable row level security;
+alter table public.visits enable row level security;
+alter table public.events enable row level security;
+alter table public.reports enable row level security;
+
+create policy "Authenticated users can view profiles" on public.profiles
+  for select to authenticated using (true);
+
+create policy "Users can manage their profile" on public.profiles
+  for all to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
+create policy "Authenticated users can manage books" on public.books
+  for all to authenticated using (true) with check (true);
+
+create policy "Authenticated users can manage readers" on public.readers
+  for all to authenticated using (true) with check (true);
+
+create policy "Authenticated users can manage visits" on public.visits
+  for all to authenticated using (true) with check (true);
+
+create policy "Authenticated users can manage events" on public.events
+  for all to authenticated using (true) with check (true);
+
+create policy "Authenticated users can manage reports" on public.reports
+  for all to authenticated using (true) with check (true);
