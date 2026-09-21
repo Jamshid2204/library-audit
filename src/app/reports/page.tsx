@@ -23,6 +23,7 @@ export default function ReportsPage() {
   const [summary, setSummary] = useState({ totalBooks: 0, totalReaders: 0, totalDebt: 0, totalVisits: 0 });
   const [reports, setReports] = useState<Report[]>([]);
   const [title, setTitle] = useState("");
+  const [editingReport, setEditingReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -36,20 +37,25 @@ export default function ReportsPage() {
     }
 
     setLoading(true);
-    const [books, readers, visits, savedReports] = await Promise.all([
+    const [books, readers, loans, visits, savedReports] = await Promise.all([
       supabase.from("books").select("quantity"),
-      supabase.from("readers").select("debt"),
+      supabase.from("readers").select("id"),
+      supabase.from("loans").select("reader_id,due_date,status,returned_at"),
       supabase.from("visits").select("id", { count: "exact", head: true }),
       supabase.from("reports").select("id,title,report_type,report_date,data").order("created_at", { ascending: false }),
     ]);
-    const queryError = books.error || readers.error || visits.error || savedReports.error;
+    const queryError = books.error || readers.error || visits.error || savedReports.error || loans.error;
     if (queryError) {
-      setError(`Hisobotlarni yuklashda xatolik: ${queryError.message}`);
+      const missingReportsTable = queryError.message.includes("public.reports") &&
+        queryError.message.includes("schema cache");
+      setError(missingReportsTable
+        ? "reports jadvali Supabase bazasida topilmadi. database/reports-migration.sql faylini Supabase SQL Editor'da ishga tushiring, so'ng sahifani yangilang."
+        : `Hisobotlarni yuklashda xatolik: ${queryError.message}`);
     } else {
       setSummary({
         totalBooks: books.data.reduce((sum, book) => sum + Number(book.quantity), 0),
         totalReaders: readers.data.length,
-        totalDebt: readers.data.reduce((sum, reader) => sum + Number(reader.debt), 0),
+        totalDebt: (loans.data ?? []).filter((loan) => loan.status === "borrowed" && !loan.returned_at && loan.due_date && loan.due_date < new Date().toISOString().slice(0, 10)).length,
         totalVisits: visits.count ?? 0,
       });
       setReports((savedReports.data ?? []) as Report[]);
@@ -74,18 +80,42 @@ export default function ReportsPage() {
 
     setSaving(true);
     setError("");
-    const { error: saveError } = await supabase.from("reports").insert({
-      title: title.trim(),
-      report_type: "Umumiy",
-      data: summary,
-    });
+    const result = editingReport
+      ? await supabase.from("reports").update({ title: title.trim() }).eq("id", editingReport.id)
+      : await supabase.from("reports").insert({ title: title.trim(), report_type: "Umumiy", data: summary });
+    const saveError = result.error;
     if (saveError) {
       setError(`Hisobotni saqlashda xatolik: ${saveError.message}`);
     } else {
       setTitle("");
+      setEditingReport(null);
       await loadReports();
     }
     setSaving(false);
+  }
+
+  function editReport(report: Report) {
+    setEditingReport(report);
+    setTitle(report.title);
+    setError("");
+  }
+
+  function cancelEdit() {
+    setEditingReport(null);
+    setTitle("");
+  }
+
+  async function deleteReport(report: Report) {
+    if (!window.confirm("Ushbu hisobotni o'chirishni xohlaysizmi?")) return;
+    const supabase = getSupabaseClient();
+    if (!supabase) { setError("Supabase sozlamalari topilmadi."); return; }
+    setError("");
+    const { error: deleteError } = await supabase.from("reports").delete().eq("id", report.id);
+    if (deleteError) setError(`Hisobotni o'chirishda xatolik: ${deleteError.message}`);
+    else {
+      if (editingReport?.id === report.id) cancelEdit();
+      await loadReports();
+    }
   }
 
   function exportExcel() {
@@ -95,7 +125,7 @@ export default function ReportsPage() {
       Sana: report.report_date,
       Kitoblar: report.data.totalBooks,
       Kitobxonlar: report.data.totalReaders,
-      "Umumiy qarz": report.data.totalDebt,
+      "Qaytarilmagan kitoblar": report.data.totalDebt,
       Qatnovlar: report.data.totalVisits,
     }));
     const workbook = XLSX.utils.book_new();
@@ -112,7 +142,7 @@ export default function ReportsPage() {
     pdf.text("Umumiy hisobot", 20, 30);
     pdf.text(`Kitoblar: ${summary.totalBooks}`, 20, 42);
     pdf.text(`Kitobxonlar: ${summary.totalReaders}`, 20, 50);
-    pdf.text(`Umumiy qarz: ${summary.totalDebt.toLocaleString()} so'm`, 20, 58);
+    pdf.text(`Qaytarilmagan kitoblar: ${summary.totalDebt} ta`, 20, 58);
     pdf.text(`Qatnovlar: ${summary.totalVisits}`, 20, 66);
     pdf.setFontSize(14);
     pdf.text("Saqlangan hisobotlar", 20, 82);
@@ -143,14 +173,15 @@ export default function ReportsPage() {
           <h3>Umumiy hisobot</h3>
           <form className="report-save-form" onSubmit={saveReport}>
             <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Hisobot nomi" />
-            <button type="submit" className="primary-btn" disabled={saving}>{saving ? "Saqlanmoqda..." : "Saqlash"}</button>
+            {editingReport ? <button type="button" className="secondary-btn" onClick={cancelEdit}>Bekor qilish</button> : null}
+            <button type="submit" className="primary-btn" disabled={saving}>{saving ? "Saqlanmoqda..." : editingReport ? "Tahrirlashni saqlash" : "Saqlash"}</button>
           </form>
         </div>
         {error ? <p className="data-error" role="alert">{error}</p> : null}
         <ul className="report-list">
           <li>Umumiy kitoblar: {summary.totalBooks}</li>
           <li>Kitobxonlar: {summary.totalReaders}</li>
-          <li>Umumiy qarz: {summary.totalDebt.toLocaleString()} so&apos;m</li>
+          <li>Qaytarilmagan kitoblar: {summary.totalDebt} ta</li>
           <li>Qatnovlar: {summary.totalVisits}</li>
         </ul>
       </div>
@@ -164,10 +195,10 @@ export default function ReportsPage() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Nomi</th><th>Turi</th><th>Sana</th><th>Kitoblar</th><th>Kitobxonlar</th><th>Qatnovlar</th></tr></thead>
+            <thead><tr><th>Nomi</th><th>Turi</th><th>Sana</th><th>Kitoblar</th><th>Kitobxonlar</th><th>Qatnovlar</th><th>Amallar</th></tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan={6} className="table-state">Yuklanmoqda...</td></tr> : reports.length === 0 ? <tr><td colSpan={6} className="table-state">Saqlangan hisobotlar yo&apos;q.</td></tr> : reports.map((report) => (
-                <tr key={report.id}><td>{report.title}</td><td>{report.report_type}</td><td>{report.report_date}</td><td>{report.data.totalBooks}</td><td>{report.data.totalReaders}</td><td>{report.data.totalVisits}</td></tr>
+              {loading ? <tr><td colSpan={7} className="table-state">Yuklanmoqda...</td></tr> : reports.length === 0 ? <tr><td colSpan={7} className="table-state">Saqlangan hisobotlar yo&apos;q.</td></tr> : reports.map((report) => (
+                <tr key={report.id}><td>{report.title}</td><td>{report.report_type}</td><td>{report.report_date}</td><td>{report.data.totalBooks}</td><td>{report.data.totalReaders}</td><td>{report.data.totalVisits}</td><td><div className="table-actions"><button type="button" className="table-action edit-action" onClick={() => editReport(report)}>Tahrirlash</button><button type="button" className="table-action delete-action" onClick={() => { void deleteReport(report); }}>O&apos;chirish</button></div></td></tr>
               ))}
             </tbody>
           </table>
