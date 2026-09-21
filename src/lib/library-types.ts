@@ -13,9 +13,13 @@ export type Book = {
 export type Reader = {
   id: string;
   fullName: string;
-  className: string;
-  institutionType: "Maktab" | "Texnikum" | "Universitet";
+  institutionType: "Maktab" | "Texnikum" | "Universitet" | "Nafaqada" | "Oliy ma'lumotli xizmatchi" | "Boshqalar";
   phone: string;
+  email: string;
+  address: string;
+  age: number | null;
+  gender: "Erkak" | "Ayol" | null;
+  specialty: string;
   debt: number;
 };
 
@@ -42,9 +46,13 @@ export type BookRow = {
 export type ReaderRow = {
   id: string;
   full_name: string;
-  class_name: string | null;
-  institution_type: "Maktab" | "Texnikum" | "Universitet";
+  institution_type: Reader["institutionType"];
   phone: string | null;
+  email: string | null;
+  address: string | null;
+  age: number | null;
+  gender: "Erkak" | "Ayol" | null;
+  specialty: string | null;
   debt: number;
 };
 

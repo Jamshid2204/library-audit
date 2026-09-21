@@ -41,10 +41,14 @@ create table if not exists public.books (
 create table if not exists public.readers (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
-  class_name text,
   institution_type text not null default 'Maktab'
-    check (institution_type in ('Maktab', 'Texnikum', 'Universitet')),
+    check (institution_type in ('Maktab', 'Texnikum', 'Universitet', 'Nafaqada', 'Oliy ma''lumotli xizmatchi', 'Boshqalar')),
   phone text,
+  email text,
+  address text,
+  age integer check (age is null or age between 0 and 120),
+  gender text check (gender is null or gender in ('Erkak', 'Ayol')),
+  specialty text,
   debt numeric not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

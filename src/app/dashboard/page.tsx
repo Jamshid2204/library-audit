@@ -9,9 +9,9 @@ import { getSupabaseClient } from "@/lib/supabase";
 type DashboardReader = {
   id: string;
   full_name: string;
-  class_name: string | null;
-  institution_type: "Maktab" | "Texnikum" | "Universitet";
+  institution_type: "Maktab" | "Texnikum" | "Universitet" | "Nafaqada" | "Oliy ma'lumotli xizmatchi" | "Boshqalar";
   debt: number;
+  branch_id: string | null;
 };
 
 type DashboardLoan = {
@@ -27,6 +27,8 @@ type DashboardVisit = {
   purpose: string;
 };
 
+type BranchStat = { id: string; name: string; books: number; readers: number; loans: number };
+
 export default function DashboardPage() {
   const [qrGenerated, setQrGenerated] = useState(false);
   const [qrText, setQrText] = useState("t.me/gurlan_takm");
@@ -36,8 +38,8 @@ export default function DashboardPage() {
   const [visits, setVisits] = useState<DashboardVisit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [classDistribution, setClassDistribution] = useState([0, 0, 0]);
-  const [institutionDistribution, setInstitutionDistribution] = useState([0, 0, 0]);
+  const [institutionDistribution, setInstitutionDistribution] = useState([0, 0, 0, 0, 0, 0]);
+  const [branchStats, setBranchStats] = useState<BranchStat[]>([]);
 
   const loadDashboard = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -49,17 +51,21 @@ export default function DashboardPage() {
 
     setLoading(true);
     setError("");
-    const [booksResult, readersResult, visitsResult, loansResult] = await Promise.all([
-      supabase.from("books").select("id"),
-      supabase.from("readers").select("id,full_name,class_name,institution_type").order("full_name"),
+    const [booksResult, readersResult, visitsResult, loansResult, branchesResult] = await Promise.all([
+      supabase.from("books").select("id,branch_id"),
+      supabase.from("readers").select("id,full_name,institution_type,branch_id").order("full_name"),
       supabase.from("visits").select("id,visit_date,purpose").order("visit_date", { ascending: false }),
-      supabase.from("loans").select("reader_id,due_date,status,returned_at"),
+      supabase.from("loans").select("reader_id,branch_id,due_date,status,returned_at"),
+      supabase.from("branches").select("id,name").order("name"),
     ]);
-    const queryError = booksResult.error || readersResult.error || visitsResult.error || loansResult.error;
+    const queryError = booksResult.error || readersResult.error || visitsResult.error || loansResult.error || branchesResult.error;
     if (queryError) {
       setError(`Statistikalarni yuklashda xatolik: ${queryError.message}`);
     } else {
       const loadedReaders = (readersResult.data ?? []) as DashboardReader[];
+      const loadedBooks = (booksResult.data ?? []) as { id: string; branch_id: string | null }[];
+      const loadedLoans = (loansResult.data ?? []) as (DashboardLoan & { branch_id: string | null })[];
+      const loadedBranches = (branchesResult.data ?? []) as { id: string; name: string }[];
       const today = new Date().toISOString().slice(0, 10);
       const overdueCounts = (loansResult.data ?? []).reduce<Record<string, number>>((counts, loan) => {
         const overdueLoan = loan as DashboardLoan;
@@ -72,17 +78,19 @@ export default function DashboardPage() {
       const loadedVisits = (visitsResult.data ?? []) as DashboardVisit[];
       setReaders(readersWithDebt.slice(0, 5));
       setVisits(loadedVisits.slice(0, 5));
-      const classCounts = [0, 0, 0];
-      const institutionCounts = [0, 0, 0];
+      const branchRows = [{ id: "main", name: "Asosiy filial", branchId: null }, ...loadedBranches.map((branch) => ({ ...branch, branchId: branch.id }))];
+      setBranchStats(branchRows.map((branch) => ({
+        id: branch.id,
+        name: branch.name,
+        books: loadedBooks.filter((book) => book.branch_id === branch.branchId).length,
+        readers: loadedReaders.filter((reader) => reader.branch_id === branch.branchId).length,
+        loans: loadedLoans.filter((loan) => loan.branch_id === branch.branchId && loan.status === "borrowed").length,
+      })));
+      const institutionCounts = [0, 0, 0, 0, 0, 0];
       loadedReaders.forEach((reader) => {
-        const classNumber = Number.parseInt(reader.class_name ?? "", 10);
-        if (classNumber >= 1 && classNumber <= 4) classCounts[0] += 1;
-        else if (classNumber >= 5 && classNumber <= 9) classCounts[1] += 1;
-        else if (classNumber >= 10) classCounts[2] += 1;
-        const institutionIndex = ["Maktab", "Texnikum", "Universitet"].indexOf(reader.institution_type);
+        const institutionIndex = ["Maktab", "Texnikum", "Universitet", "Nafaqada", "Oliy ma'lumotli xizmatchi", "Boshqalar"].indexOf(reader.institution_type);
         if (institutionIndex >= 0) institutionCounts[institutionIndex] += 1;
       });
-      setClassDistribution(classCounts);
       setInstitutionDistribution(institutionCounts);
       setStats({
         totalBooks: booksResult.data?.length ?? 0,
@@ -204,21 +212,28 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="panel-card branch-statistics">
+        <div className="panel-header"><h3>Filiallar statistikasi</h3></div>
+        <div className="branch-stat-grid">
+          {branchStats.map((branch) => <div className="branch-stat-card" key={branch.id}><strong>{branch.name}</strong><span>{branch.books} ta kitob</span><span>{branch.readers} ta kitobxon</span><span>{branch.loans} ta berilgan kitob</span></div>)}
+        </div>
+      </div>
+
       <div className="analytics-grid">
         <div className="panel-card">
           <h3>Kitobxonlar statistikasi</h3>
           <div className="chart-box bar-chart">
             <div className="bars">
-              {classDistribution.map((count, index) => {
-                const max = Math.max(...classDistribution, 1);
+              {institutionDistribution.slice(0, 3).map((count, index) => {
+                const max = Math.max(...institutionDistribution, 1);
                 return <span key={index} style={{ height: `${Math.max((count / max) * 100, count ? 8 : 2)}%` }} title={`${count} kitobxon`} />;
               })}
             </div>
           </div>
           <div className="chart-labels">
-            <span>1-4 sinf</span>
-            <span>5-9 sinf</span>
-            <span>10-11 sinf</span>
+            <span>Maktab</span>
+            <span>Texnikum</span>
+            <span>Universitet</span>
           </div>
         </div>
 
@@ -231,9 +246,13 @@ export default function DashboardPage() {
                 style={{
                   background: (() => {
                     const total = Math.max(institutionDistribution.reduce((sum, count) => sum + count, 0), 1);
-                    const schoolEnd = institutionDistribution[0] / total * 100;
-                    const collegeEnd = (institutionDistribution[0] + institutionDistribution[1]) / total * 100;
-                    return `conic-gradient(#0d83ea 0 ${schoolEnd}%, #f39c12 ${schoolEnd}% ${collegeEnd}%, #2ecb8b ${collegeEnd}% 100%)`;
+                    const colors = ["#0d83ea", "#f39c12", "#2ecb8b", "#8b5cf6", "#ec4899", "#64748b"];
+                    const segments = institutionDistribution.reduce<{ current: number; values: string[] }>((result, count, index) => {
+                      const start = result.current;
+                      const end = start + count / total * 100;
+                      return { current: end, values: [...result.values, `${colors[index]} ${start}% ${end}%`] };
+                    }, { current: 0, values: [] }).values;
+                    return `conic-gradient(${segments.join(", ")})`;
                   })(),
                 }}
               />
@@ -246,6 +265,9 @@ export default function DashboardPage() {
               <span><i className="dot blue" /> Maktab ({institutionDistribution[0]})</span>
               <span><i className="dot orange" /> Texnikum ({institutionDistribution[1]})</span>
               <span><i className="dot green" /> Universitet ({institutionDistribution[2]})</span>
+              <span><i className="dot purple" /> Nafaqada ({institutionDistribution[3]})</span>
+              <span><i className="dot pink" /> Oliy ma&apos;lumotli xizmatchi ({institutionDistribution[4]})</span>
+              <span><i className="dot slate" /> Boshqalar ({institutionDistribution[5]})</span>
             </div>
           </div>
         </div>
@@ -265,7 +287,7 @@ export default function DashboardPage() {
           <h3>Eng faol kitobxonlar</h3>
           <ul className="mini-list">
             {readers.map((reader) => (
-              <li key={reader.id}>{reader.full_name} — {reader.class_name ?? "—"}</li>
+              <li key={reader.id}>{reader.full_name} — {reader.institution_type}</li>
             ))}
           </ul>
         </div>

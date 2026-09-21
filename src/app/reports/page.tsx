@@ -16,8 +16,57 @@ type Report = {
     totalReaders: number;
     totalDebt: number;
     totalVisits: number;
+    ageDistribution?: Record<string, number>;
+    genderDistribution?: Record<string, number>;
+    specialtyDistribution?: Record<string, number>;
   };
 };
+
+type ReaderDemographic = {
+  age: number | null;
+  gender: "Erkak" | "Ayol" | null;
+  institution_type: "Maktab" | "Texnikum" | "Universitet" | "Nafaqada" | "Oliy ma'lumotli xizmatchi" | "Boshqalar" | null;
+};
+
+const ageGroups = ["6–15 yosh", "16–30 yosh", "31–50 yosh", "51–59 yosh", "60 yosh va undan katta"];
+const institutionTypes = ["Maktab", "Texnikum", "Universitet", "Nafaqada", "Oliy ma'lumotli xizmatchi", "Boshqalar"];
+
+function countAgeGroups(ages: Array<number | null>) {
+  const counts = Object.fromEntries(ageGroups.map((group) => [group, 0]));
+  ages.forEach((age) => {
+    const group = age === null ? null
+      : age >= 6 && age <= 15 ? ageGroups[0]
+        : age <= 30 ? ageGroups[1]
+          : age <= 50 ? ageGroups[2]
+            : age <= 59 ? ageGroups[3]
+              : age >= 60 ? ageGroups[4] : null;
+    if (group) counts[group] += 1;
+  });
+  return counts;
+}
+
+function countGenders(genders: Array<ReaderDemographic["gender"]>) {
+  const counts = { Erkak: 0, Ayol: 0 };
+  genders.forEach((gender) => {
+    if (gender === "Erkak" || gender === "Ayol") counts[gender] += 1;
+  });
+  return counts;
+}
+
+function countInstitutionTypes(types: Array<ReaderDemographic["institution_type"]>) {
+  const counts = Object.fromEntries(institutionTypes.map((type) => [type, 0]));
+  types.forEach((type) => {
+    if (type && type in counts) counts[type] += 1;
+  });
+  return counts;
+}
+
+function formatDistribution(distribution: Record<string, number> | undefined) {
+  if (!distribution) return "Ma'lumot yo'q";
+  return Object.entries(distribution)
+    .map(([label, count]) => `${label}: ${count}`)
+    .join("; ");
+}
 
 export default function ReportsPage() {
   const [summary, setSummary] = useState({ totalBooks: 0, totalReaders: 0, totalDebt: 0, totalVisits: 0 });
@@ -27,6 +76,12 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [demographicError, setDemographicError] = useState("");
+  const [demographics, setDemographics] = useState({
+    age: {} as Record<string, number>,
+    gender: {} as Record<string, number>,
+    specialty: {} as Record<string, number>,
+  });
 
   const loadReports = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -37,9 +92,10 @@ export default function ReportsPage() {
     }
 
     setLoading(true);
-    const [books, readers, loans, visits, savedReports] = await Promise.all([
+    const [books, readers, demographicReaders, loans, visits, savedReports] = await Promise.all([
       supabase.from("books").select("quantity"),
       supabase.from("readers").select("id"),
+      supabase.from("readers").select("age,gender,institution_type"),
       supabase.from("loans").select("reader_id,due_date,status,returned_at"),
       supabase.from("visits").select("id", { count: "exact", head: true }),
       supabase.from("reports").select("id,title,report_type,report_date,data").order("created_at", { ascending: false }),
@@ -52,6 +108,21 @@ export default function ReportsPage() {
         ? "reports jadvali Supabase bazasida topilmadi. database/reports-migration.sql faylini Supabase SQL Editor'da ishga tushiring, so'ng sahifani yangilang."
         : `Hisobotlarni yuklashda xatolik: ${queryError.message}`);
     } else {
+      setDemographicError("");
+      if (demographicReaders.error) {
+        const missingDemographicColumns = /column readers\.(age|gender|specialty) does not exist/i.test(demographicReaders.error.message);
+        setDemographicError(missingDemographicColumns
+          ? "Yosh, jins va mutaxassislik ustunlari bazada hali yaratilmagan. database/readers-demographics-migration.sql faylini Supabase SQL Editor'da ishga tushiring."
+          : `Kitobxonlar demografiyasini yuklashda xatolik: ${demographicReaders.error.message}`);
+        setDemographics({ age: {}, gender: {}, specialty: {} });
+      } else {
+        const readerDemographics = (demographicReaders.data ?? []) as ReaderDemographic[];
+        setDemographics({
+          age: countAgeGroups(readerDemographics.map((reader) => reader.age)),
+          gender: countGenders(readerDemographics.map((reader) => reader.gender)),
+          specialty: countInstitutionTypes(readerDemographics.map((reader) => reader.institution_type)),
+        });
+      }
       setSummary({
         totalBooks: books.data.reduce((sum, book) => sum + Number(book.quantity), 0),
         totalReaders: readers.data.length,
@@ -80,9 +151,15 @@ export default function ReportsPage() {
 
     setSaving(true);
     setError("");
+    const reportData = {
+      ...summary,
+      ageDistribution: demographics.age,
+      genderDistribution: demographics.gender,
+      specialtyDistribution: demographics.specialty,
+    };
     const result = editingReport
-      ? await supabase.from("reports").update({ title: title.trim() }).eq("id", editingReport.id)
-      : await supabase.from("reports").insert({ title: title.trim(), report_type: "Umumiy", data: summary });
+      ? await supabase.from("reports").update({ title: title.trim(), data: reportData }).eq("id", editingReport.id)
+      : await supabase.from("reports").insert({ title: title.trim(), report_type: "Umumiy", data: reportData });
     const saveError = result.error;
     if (saveError) {
       setError(`Hisobotni saqlashda xatolik: ${saveError.message}`);
@@ -127,10 +204,19 @@ export default function ReportsPage() {
       Kitobxonlar: report.data.totalReaders,
       "Qaytarilmagan kitoblar": report.data.totalDebt,
       Qatnovlar: report.data.totalVisits,
+      "Yosh bo'yicha": formatDistribution(report.data.ageDistribution ?? demographics.age),
+      "Jins bo'yicha": formatDistribution(report.data.genderDistribution ?? demographics.gender),
+      "Mutaxassislik bo'yicha": formatDistribution(report.data.specialtyDistribution ?? demographics.specialty),
     }));
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(workbook, worksheet, "Hisobotlar");
+    const demographicRows = [
+      ...Object.entries(demographics.age).map(([Nomi, Soni]) => ({ Tur: "Yosh", Nomi, Soni })),
+      ...Object.entries(demographics.gender).map(([Nomi, Soni]) => ({ Tur: "Jins", Nomi, Soni })),
+      ...Object.entries(demographics.specialty).map(([Nomi, Soni]) => ({ Tur: "Mutaxassislik", Nomi, Soni })),
+    ];
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(demographicRows), "Kitobxonlar");
     XLSX.writeFile(workbook, "hisobotlar.xlsx");
   }
 
@@ -144,11 +230,27 @@ export default function ReportsPage() {
     pdf.text(`Kitobxonlar: ${summary.totalReaders}`, 20, 50);
     pdf.text(`Qaytarilmagan kitoblar: ${summary.totalDebt} ta`, 20, 58);
     pdf.text(`Qatnovlar: ${summary.totalVisits}`, 20, 66);
+    pdf.setFontSize(12);
+    pdf.text("Kitobxonlar demografiyasi", 20, 78);
+    let demographicY = 88;
+    for (const [title, values] of [["Yosh", demographics.age], ["Jins", demographics.gender], ["Mutaxassislik", demographics.specialty]] as const) {
+      pdf.text(`${title}:`, 20, demographicY);
+      demographicY += 6;
+      Object.entries(values).forEach(([label, count]) => {
+        if (demographicY > 275) {
+          pdf.addPage();
+          demographicY = 20;
+        }
+        pdf.text(`${label}: ${count} ta`, 25, demographicY);
+        demographicY += 5;
+      });
+      demographicY += 3;
+    }
     pdf.setFontSize(14);
-    pdf.text("Saqlangan hisobotlar", 20, 82);
+    pdf.text("Saqlangan hisobotlar", 20, demographicY + 4);
     pdf.setFontSize(10);
 
-    let y = 92;
+    let y = demographicY + 14;
     reports.forEach((report) => {
       if (y > 275) {
         pdf.addPage();
@@ -178,12 +280,27 @@ export default function ReportsPage() {
           </form>
         </div>
         {error ? <p className="data-error" role="alert">{error}</p> : null}
+        {demographicError ? <p className="data-error" role="alert">{demographicError}</p> : null}
         <ul className="report-list">
           <li>Umumiy kitoblar: {summary.totalBooks}</li>
           <li>Kitobxonlar: {summary.totalReaders}</li>
           <li>Qaytarilmagan kitoblar: {summary.totalDebt} ta</li>
           <li>Qatnovlar: {summary.totalVisits}</li>
         </ul>
+      </div>
+      <div className="demographic-report-grid">
+        <div className="panel-card demographic-card">
+          <h3>Yosh bo&apos;yicha kitobxonlar</h3>
+          <ReportBreakdown data={demographics.age} />
+        </div>
+        <div className="panel-card demographic-card">
+          <h3>Jins bo&apos;yicha kitobxonlar</h3>
+          <ReportBreakdown data={demographics.gender} />
+        </div>
+        <div className="panel-card demographic-card">
+          <h3>Mutaxassislik bo&apos;yicha kitobxonlar</h3>
+          <ReportBreakdown data={demographics.specialty} />
+        </div>
       </div>
       <div className="panel-card table-panel">
         <div className="panel-header">
@@ -206,4 +323,11 @@ export default function ReportsPage() {
       </div>
     </DashboardShell>
   );
+}
+
+function ReportBreakdown({ data }: { data: Record<string, number> }) {
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  return entries.length === 0
+    ? <p className="table-state">Ma&apos;lumot yo&apos;q.</p>
+    : <div className="breakdown-list">{entries.map(([label, count]) => <div className="breakdown-row" key={label}><span>{label}</span><strong>{count} ta</strong></div>)}</div>;
 }

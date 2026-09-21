@@ -599,6 +599,9 @@ button:disabled { cursor: wait; opacity: 0.65; }
 .dot.blue { background: #0d83ea; }
 .dot.orange { background: #f39c12; }
 .dot.green { background: #2ecb8b; }
+.dot.purple { background: #8b5cf6; }
+.dot.pink { background: #ec4899; }
+.dot.slate { background: #64748b; }
 .action-panel { display: flex; flex-direction: column; gap: 9px; }
 .quick-btn {
   background: #12b39b;
@@ -621,6 +624,7 @@ button:disabled { cursor: wait; opacity: 0.65; }
   padding: 0;
   margin: 0;
   display: grid;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 .compact-card .mini-list li, .report-list li {
@@ -781,6 +785,79 @@ th {
   padding: 18px;
   box-shadow: 0 3px 12px var(--shadow);
 }
+.panel-subtitle {
+  margin: -7px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.date-filter {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.date-filter input {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: var(--card);
+  color: var(--text);
+}
+.date-range-filter {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+}
+.visits-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.demographic-report-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 18px;
+}
+.demographic-card h3 { font-size: 17px; }
+.breakdown-list { display: grid; gap: 8px; }
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+}
+.compact-list { display: grid; gap: 10px; margin-top: 14px; }
+.compact-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.branch-statistics { margin-bottom: 18px; }
+.branch-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.branch-stat-card {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.branch-stat-card strong { color: var(--text); }
+.branch-stat-card span { color: var(--muted); font-size: 13px; }
 
 @media (max-width: 1200px) {
   .search-box { min-width: 320px; }
@@ -825,6 +902,11 @@ th {
   .page-header { margin-bottom: 12px; }
   .page-header h2 { font-size: 24px; }
   .classic-grid, .bottom-grid, .analytics-grid { grid-template-columns: 1fr; }
+  .visits-summary-grid { grid-template-columns: 1fr; }
+  .demographic-report-grid { grid-template-columns: 1fr; }
+  .report-list { grid-template-columns: 1fr; }
+  .date-range-filter { width: 100%; }
+  .date-range-filter .date-filter { flex: 1; min-width: 0; }
   .hero-layout { gap: 12px; }
   .hero-panel { min-height: 190px; padding: 20px 18px; }
   .hero-copy p { font-size: 16px; }

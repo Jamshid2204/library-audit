@@ -2,74 +2,139 @@
 
 import { DashboardShell } from "@/components/dashboard-shell";
 import { getSupabaseClient } from "@/lib/supabase";
-import type { Visit, VisitRow } from "@/lib/library-types";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-type ReaderOption = {
-  id: string;
-  full_name: string;
+type VisitRow = { id: string; visitor_name: string; visit_date: string };
+type LoanRow = {
+  borrowed_at: string;
+  books: { book_type: string; language: string; title: string } | { book_type: string; language: string; title: string }[] | null;
 };
 
-const blank = { visitorName: "", visitDate: new Date().toISOString().slice(0, 10), purpose: "", notes: "" };
+const getToday = () => new Date().toISOString().slice(0, 10);
+const bookTypes = [
+  "Badiiy adabiyotlar", "Umumiy bo'lim", "Falsafa fanlari. Psixologiya", "Diniy. Ilohiyot",
+  "Ijtimoiy-siyosiy", "Tabiiy fanlar va aniq fanlar", "Amaliy fanlar", "San'at va sport",
+  "Adabiyotshunoslik, tilshunoslik, filologiya", "Tarix, geografiya", "Gazetalar", "Jurnallar",
+];
+const languages = ["Kirilcha", "Lotincha", "Ruscha", "Inglizcha"];
 
 export default function VisitsPage() {
-  const [visits, setVisits] = useState<Visit[]>([]);
-  const [readers, setReaders] = useState<ReaderOption[]>([]);
-  const [form, setForm] = useState(blank);
-  const [editing, setEditing] = useState<Visit | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [startDate, setStartDate] = useState(getToday);
+  const [endDate, setEndDate] = useState(getToday);
+  const [visits, setVisits] = useState<VisitRow[]>([]);
+  const [loans, setLoans] = useState<LoanRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const loadVisits = useCallback(async () => {
-    const supabase = getSupabaseClient();
-    if (!supabase) { setError("Supabase sozlamalari topilmadi. .env.local faylini tekshiring."); setLoading(false); return; }
-    setLoading(true); setError("");
-    const { data, error: queryError } = await supabase.from("visits").select("id,visitor_name,visit_date,purpose,notes").order("visit_date", { ascending: false });
-    if (queryError) setError(`Qatnovlarni yuklashda xatolik: ${queryError.message}`);
-    else setVisits((data as VisitRow[]).map((visit) => ({ id: visit.id, visitorName: visit.visitor_name, visitDate: visit.visit_date, purpose: visit.purpose, notes: visit.notes ?? "" })));
-    setLoading(false);
-  }, []);
-  const loadReaders = useCallback(async () => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
 
-    const { data, error: queryError } = await supabase
-      .from("readers")
-      .select("id,full_name")
-      .order("full_name", { ascending: true });
-    if (queryError) {
-      setError(`Kitobxonlarni yuklashda xatolik: ${queryError.message}`);
-    } else {
-      setReaders((data ?? []) as ReaderOption[]);
-    }
-  }, []);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadVisits(); }, [loadVisits]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadReaders(); }, [loadReaders]);
-  const openCreate = () => { setEditing(null); setForm(blank); setDialogOpen(true); setError(""); };
-  const openEdit = (visit: Visit) => { setEditing(visit); setForm({ visitorName: visit.visitorName, visitDate: visit.visitDate, purpose: visit.purpose, notes: visit.notes }); setDialogOpen(true); setError(""); };
-  const close = () => { setDialogOpen(false); setEditing(null); };
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const supabase = getSupabaseClient();
-    if (!supabase) { setError("Supabase sozlamalari topilmadi."); return; }
-    if (!form.visitorName.trim() || !form.visitDate || !form.purpose.trim()) { setError("F.I.Sh., sana va maqsad majburiy."); return; }
-    if (!editing && !readers.some((reader) => reader.full_name === form.visitorName.trim())) {
-      setError("Ro'yxatdan kitobxonni tanlang.");
+  const loadStatistics = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setError("Supabase sozlamalari topilmadi. .env.local faylini tekshiring.");
+      setLoading(false);
       return;
     }
-    setSaving(true); setError("");
-    const payload = { visitor_name: form.visitorName.trim(), visit_date: form.visitDate, purpose: form.purpose.trim(), notes: form.notes.trim() || null };
-    const result = editing ? await supabase.from("visits").update(payload).eq("id", editing.id) : await supabase.from("visits").insert(payload);
-    if (result.error) setError(`Qatnovni saqlashda xatolik: ${result.error.message}`); else { close(); await loadVisits(); }
-    setSaving(false);
-  }
-  async function remove(visit: Visit) {
-    if (!window.confirm("Ushbu qatnovni o'chirishni xohlaysizmi?")) return;
-    const supabase = getSupabaseClient(); if (!supabase) { setError("Supabase sozlamalari topilmadi."); return; }
-    const { error: deleteError } = await supabase.from("visits").delete().eq("id", visit.id);
-    if (deleteError) setError(`Qatnovni o'chirishda xatolik: ${deleteError.message}`); else await loadVisits();
-  }
-  return <DashboardShell title="Qatnov"><div className="panel-card table-panel"><div className="panel-header"><h3>Qatnovlar</h3><button type="button" className="primary-btn" onClick={openCreate}>+ Qatnov yozish</button></div>{error && <p className="data-error" role="alert">{error}</p>}<div className="table-wrap"><table><thead><tr><th>Sana</th><th>F.I.Sh.</th><th>Maqsad</th><th>Qayd</th><th>Amallar</th></tr></thead><tbody>{loading ? <tr><td colSpan={5} className="table-state">Yuklanmoqda...</td></tr> : visits.length === 0 ? <tr><td colSpan={5} className="table-state">Qatnovlar topilmadi.</td></tr> : visits.map((visit) => (<tr key={visit.id}><td>{visit.visitDate}</td><td>{visit.visitorName}</td><td>{visit.purpose}</td><td>{visit.notes}</td><td><button type="button" className="table-action edit-action" onClick={() => openEdit(visit)}>Tahrirlash</button><button type="button" className="table-action delete-action" onClick={() => { void remove(visit); }}>O&apos;chirish</button></td></tr>))}</tbody></table></div></div>{dialogOpen && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><form className="data-dialog" onSubmit={save}><h3>{editing ? "Qatnovni tahrirlash" : "Yangi qatnov"}</h3><label>F.I.Sh.<input list="reader-options" value={form.visitorName} onChange={(event) => setForm({ ...form, visitorName: event.target.value })} placeholder="Kitobxon nomini yozing yoki tanlang" required /><datalist id="reader-options">{readers.map((reader) => <option key={reader.id} value={reader.full_name} />)}{editing && !readers.some((reader) => reader.full_name === editing.visitorName) ? <option value={editing.visitorName} /> : null}</datalist></label><label>Sana<input type="date" value={form.visitDate} onChange={(e) => setForm({ ...form, visitDate: e.target.value })} required /></label><label>Maqsad<input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} required /></label><label>Qayd<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} /></label><div className="dialog-actions"><button type="button" className="secondary-btn" onClick={close}>Bekor qilish</button><button type="submit" className="primary-btn" disabled={saving || readers.length === 0}>{saving ? "Saqlanmoqda..." : "Saqlash"}</button></div></form></div>}</DashboardShell>;
+    if (startDate > endDate) {
+      setError("Boshlanish sanasi tugash sanasidan keyin bo'lishi mumkin emas.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    const start = `${startDate}T00:00:00.000Z`;
+    const end = `${endDate}T23:59:59.999Z`;
+    const [visitsResult, loansResult] = await Promise.all([
+      supabase.from("visits").select("id,visitor_name,visit_date").gte("visit_date", startDate).lte("visit_date", endDate),
+      supabase.from("loans").select("borrowed_at,books(book_type,language,title)").gte("borrowed_at", start).lte("borrowed_at", end),
+    ]);
+    const queryError = visitsResult.error || loansResult.error;
+    if (queryError) {
+      setError(`Qatnov statistikasini yuklashda xatolik: ${queryError.message}`);
+    } else {
+      setVisits((visitsResult.data ?? []) as VisitRow[]);
+      setLoans((loansResult.data ?? []) as LoanRow[]);
+    }
+    setLoading(false);
+  }, [startDate, endDate]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadStatistics(); }, [loadStatistics]);
+
+  const booksByType = useMemo(() => {
+    const counts = bookTypes.reduce<Record<string, number>>((result, type) => {
+      result[type] = 0;
+      return result;
+    }, {});
+    loans.reduce<Record<string, number>>((result, loan) => {
+      const book = Array.isArray(loan.books) ? loan.books[0] : loan.books;
+      const type = book?.book_type || "Turi ko'rsatilmagan";
+      result[type] = (result[type] ?? 0) + 1;
+      return result;
+    }, counts);
+    return counts;
+  }, [loans]);
+
+  const booksByLanguage = useMemo(() => {
+    const counts = languages.reduce<Record<string, number>>((result, language) => {
+      result[language] = 0;
+      return result;
+    }, {});
+    loans.reduce<Record<string, number>>((result, loan) => {
+      const book = Array.isArray(loan.books) ? loan.books[0] : loan.books;
+      const language = book?.language || "Tili ko'rsatilmagan";
+      result[language] = (result[language] ?? 0) + 1;
+      return result;
+    }, counts);
+    return counts;
+  }, [loans]);
+
+  const uniqueVisitors = useMemo(() => new Set(visits.map((visit) => visit.visitor_name)).size, [visits]);
+  const totalBooks = Object.values(booksByType).reduce((sum, count) => sum + count, 0);
+  const invalidRange = startDate > endDate;
+
+  return (
+    <DashboardShell title="Qatnov statistikasi">
+      <div className="panel-card visits-statistics">
+        <div className="panel-header">
+          <div>
+            <h3>Kunlik qatnov va kitob olish statistikasi</h3>
+            <p className="panel-subtitle">Qatnov qo&apos;shish shart emas — ma&apos;lumotlar bazadagi yozuvlardan avtomatik hisoblanadi.</p>
+          </div>
+          <div className="date-range-filter">
+            <label className="date-filter">Boshlanish sanasi<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
+            <label className="date-filter">Tugash sanasi<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+          </div>
+        </div>
+        {error ? <p className="data-error" role="alert">{error}</p> : null}
+        <div className="stats-grid visits-summary-grid">
+          <div className="stat-card accent"><div className="stat-icon">👥</div><div className="stat-copy"><span>Kelgan odamlar</span><strong>{loading ? "..." : uniqueVisitors}</strong></div></div>
+          <div className="stat-card violet"><div className="stat-icon">📚</div><div className="stat-copy"><span>Olingan kitoblar</span><strong>{loading ? "..." : totalBooks}</strong></div></div>
+          <div className="stat-card orange"><div className="stat-icon">🗓️</div><div className="stat-copy"><span>Sana oralig&apos;i</span><strong>{invalidRange ? "Noto'g'ri" : `${startDate} — ${endDate}`}</strong></div></div>
+        </div>
+      </div>
+
+      <div className="panel-card table-panel">
+        <div className="panel-header"><h3>Kitob turi bo&apos;yicha olingan kitoblar</h3></div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Kitob turi</th><th>Olingan kitoblar soni</th></tr></thead>
+            <tbody>
+              {loading ? <tr><td colSpan={2} className="table-state">Yuklanmoqda...</td></tr> : Object.entries(booksByType).map(([type, count]) => <tr key={type}><td>{type}</td><td>{count} ta</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="panel-card table-panel">
+        <div className="panel-header"><h3>Kitob tili bo&apos;yicha olingan kitoblar</h3></div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Kitob tili</th><th>Olingan kitoblar soni</th></tr></thead>
+            <tbody>
+              {loading ? <tr><td colSpan={2} className="table-state">Yuklanmoqda...</td></tr> : Object.entries(booksByLanguage).map(([language, count]) => <tr key={language}><td>{language}</td><td>{count} ta</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </DashboardShell>
+  );
 }

@@ -10,9 +10,11 @@ export async function proxy(request: NextRequest) {
     if (request.nextUrl.pathname.startsWith("/dashboard") ||
         request.nextUrl.pathname.startsWith("/books") ||
         request.nextUrl.pathname.startsWith("/readers") ||
+        request.nextUrl.pathname.startsWith("/loans") ||
         request.nextUrl.pathname.startsWith("/visits") ||
         request.nextUrl.pathname.startsWith("/reports") ||
-        request.nextUrl.pathname.startsWith("/settings")) {
+        request.nextUrl.pathname.startsWith("/settings") ||
+        request.nextUrl.pathname.startsWith("/branches")) {
       return NextResponse.redirect(new URL("/login?error=configuration", request.url));
     }
     return response;
@@ -35,9 +37,9 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const isProtectedRoute =
     request.nextUrl.pathname === "/dashboard" ||
-    ["/books", "/readers", "/visits", "/reports", "/settings"].some((path) =>
+    ["/books", "/readers", "/loans", "/visits", "/reports", "/settings"].some((path) =>
       request.nextUrl.pathname.startsWith(path),
-    );
+    ) || request.nextUrl.pathname.startsWith("/branches");
 
   if (isProtectedRoute && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
@@ -51,5 +53,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/dashboard/:path*", "/books/:path*", "/readers/:path*", "/visits/:path*", "/reports/:path*", "/settings/:path*"],
+  matcher: ["/login", "/dashboard/:path*", "/books/:path*", "/readers/:path*", "/loans/:path*", "/visits/:path*", "/reports/:path*", "/settings/:path*", "/branches/:path*"],
 };
