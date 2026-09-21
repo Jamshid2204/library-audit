@@ -20,6 +20,7 @@ export function DashboardShell({ title, children }: { title: string; children: R
   const pathname = usePathname();
   const router = useRouter();
   const [language, setLanguage] = useState("uz");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const syncLanguage = () => setLanguage(window.localStorage.getItem("app-language") || "uz");
@@ -49,7 +50,7 @@ export function DashboardShell({ title, children }: { title: string; children: R
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className={menuOpen ? "sidebar mobile-open" : "sidebar"}>
         <div className="brand-row">
           <div className="brand-pill">S</div>
           <div>
@@ -67,6 +68,7 @@ export function DashboardShell({ title, children }: { title: string; children: R
                 key={item.href}
                 href={item.href}
                 className={isActive ? "nav-item active" : "nav-item"}
+                onClick={() => setMenuOpen(false)}
               >
                 {russian ? labels[item.href][1] : item.label}
               </Link>
@@ -81,11 +83,12 @@ export function DashboardShell({ title, children }: { title: string; children: R
           </button>
         </div>
       </aside>
+      {menuOpen ? <button type="button" className="sidebar-overlay" aria-label="Close menu" onClick={() => setMenuOpen(false)} /> : null}
 
       <main className="main-panel">
         <header className="topbar">
           <div className="topbar-left">
-            <button type="button" className="top-icon" aria-label="Open menu">
+            <button type="button" className="top-icon menu-toggle" aria-label="Open menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
               ☰
             </button>
             <div className="search-box">
