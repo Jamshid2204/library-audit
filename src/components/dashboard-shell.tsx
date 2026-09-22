@@ -13,7 +13,7 @@ const navItems = [
   { href: "/loans", label: "Berilgan kitoblar" },
   { href: "/visits", label: "Qatnov" },
   { href: "/reports", label: "Hisobotlar" },
-  { href: "/branches", label: "Filiallar" },
+  { href: "/branches", label: "Ko'chma kutubxonalar" },
   { href: "/settings", label: "Sozlamalar" },
 ];
 
@@ -38,7 +38,7 @@ export function DashboardShell({ title, children }: { title: string; children: R
     "/loans": ["Berilgan kitoblar", "Выданные книги"],
     "/visits": ["Qatnov", "Посещения"],
     "/reports": ["Hisobotlar", "Отчёты"],
-    "/branches": ["Filiallar", "Филиалы"],
+    "/branches": ["Ko'chma kutubxonalar", "Передвижные библиотеки"],
     "/settings": ["Sozlamalar", "Настройки"],
   };
 

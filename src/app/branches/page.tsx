@@ -21,7 +21,7 @@ export default function BranchesPage() {
     if (!supabase) { setError("Supabase sozlamalari topilmadi."); setLoading(false); return; }
     setLoading(true);
     const { data, error: queryError } = await supabase.from("branches").select("id,name,created_at").order("name");
-    if (queryError) setError(`Filiallarni yuklashda xatolik: ${queryError.message}`);
+    if (queryError) setError(`Ko'chma kutubxonalarni yuklashda xatolik: ${queryError.message}`);
     else setBranches((data ?? []) as Branch[]);
     setLoading(false);
   }, []);
@@ -34,13 +34,13 @@ export default function BranchesPage() {
     const supabase = getSupabaseClient();
     if (!supabase) { setError("Supabase sozlamalari topilmadi."); return; }
     if (!form.name.trim() || !form.email.trim() || form.password.length < 6) {
-      setError("Filial nomi, email va kamida 6 belgili vaqtinchalik parolni kiriting.");
+      setError("Ko'chma kutubxona nomi, email va kamida 6 belgili vaqtinchalik parolni kiriting.");
       return;
     }
     setSaving(true); setError("");
     const { data: branch, error: branchError } = await supabase.from("branches").insert({ name: form.name.trim() }).select("id").single();
     if (branchError || !branch) {
-      setError(`Filialni saqlashda xatolik: ${branchError?.message ?? "Noma'lum xatolik"}`);
+      setError(`Ko'chma kutubxonani saqlashda xatolik: ${branchError?.message ?? "Noma'lum xatolik"}`);
       setSaving(false);
       return;
     }
@@ -52,7 +52,7 @@ export default function BranchesPage() {
     const result = await response.json() as { error?: string };
     if (!response.ok) {
       await supabase.from("branches").delete().eq("id", branch.id);
-      setError(result.error ?? "Filial foydalanuvchisi yaratilmadi.");
+      setError(result.error ?? "Ko'chma kutubxona foydalanuvchisi yaratilmadi.");
     } else {
       setForm(emptyForm);
       await loadBranches();
@@ -61,28 +61,28 @@ export default function BranchesPage() {
   }
 
   async function deleteBranch(branch: Branch) {
-    if (!window.confirm("Filialni o'chirishni xohlaysizmi? Filialdagi ma'lumotlar ham o'chishi mumkin.")) return;
+    if (!window.confirm("Ko'chma kutubxonani o'chirishni xohlaysizmi? Undagi ma'lumotlar ham o'chishi mumkin.")) return;
     const supabase = getSupabaseClient();
     if (!supabase) { setError("Supabase sozlamalari topilmadi."); return; }
     const { error: deleteError } = await supabase.from("branches").delete().eq("id", branch.id);
-    if (deleteError) setError(`Filialni o'chirishda xatolik: ${deleteError.message}`);
+    if (deleteError) setError(`Ko'chma kutubxonani o'chirishda xatolik: ${deleteError.message}`);
     else await loadBranches();
   }
 
   return (
-    <DashboardShell title="Filiallar">
+    <DashboardShell title="Ko'chma kutubxonalar">
       <div className="settings-grid">
         <form className="panel-card" onSubmit={createBranch}>
-          <h3>Yangi filial va login</h3>
-          <label>Filial nomi<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-          <label>Filial login emaili<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
+          <h3>Yangi ko&apos;chma kutubxona va login</h3>
+          <label>Ko&apos;chma kutubxona nomi<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
+          <label>Ko&apos;chma kutubxona login emaili<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label>
           <label>Vaqtinchalik parol<input type="password" minLength={6} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required /></label>
-          <button type="submit" className="primary-btn" disabled={saving}>{saving ? "Yaratilmoqda..." : "Filial yaratish"}</button>
+          <button type="submit" className="primary-btn" disabled={saving}>{saving ? "Yaratilmoqda..." : "Ko'chma kutubxona yaratish"}</button>
         </form>
         <div className="panel-card">
-          <h3>Filiallar</h3>
+          <h3>Ko&apos;chma kutubxonalar</h3>
           {error ? <p className="data-error" role="alert">{error}</p> : null}
-          {loading ? <p>Yuklanmoqda...</p> : branches.length === 0 ? <p>Filiallar topilmadi.</p> : <div className="compact-list">{branches.map((branch) => <div className="compact-list-item" key={branch.id}><strong>{branch.name}</strong><button type="button" className="table-action delete-action" onClick={() => { void deleteBranch(branch); }}>O&apos;chirish</button></div>)}</div>}
+          {loading ? <p>Yuklanmoqda...</p> : branches.length === 0 ? <p>Ko&apos;chma kutubxonalar topilmadi.</p> : <div className="compact-list">{branches.map((branch) => <div className="compact-list-item" key={branch.id}><strong>{branch.name}</strong><button type="button" className="table-action delete-action" onClick={() => { void deleteBranch(branch); }}>O&apos;chirish</button></div>)}</div>}
         </div>
       </div>
     </DashboardShell>

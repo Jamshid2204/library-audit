@@ -15,12 +15,12 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .maybeSingle();
   if (profileError || (profile && profile.role !== "admin")) {
-    return NextResponse.json({ error: "Faqat admin filial foydalanuvchisi yarata oladi." }, { status: 403 });
+    return NextResponse.json({ error: "Faqat admin ko'chma kutubxona foydalanuvchisi yarata oladi." }, { status: 403 });
   }
 
   const body = await request.json() as { branchId?: string; email?: string; password?: string };
   if (!body.branchId || !body.email || !body.password || body.password.length < 6) {
-    return NextResponse.json({ error: "Filial, email va kamida 6 belgili parol kiriting." }, { status: 400 });
+    return NextResponse.json({ error: "Ko'chma kutubxona, email va kamida 6 belgili parol kiriting." }, { status: 400 });
   }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   const adminClient = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const { data: branch, error: branchError } = await adminClient.from("branches").select("id").eq("id", body.branchId).maybeSingle();
-  if (branchError || !branch) return NextResponse.json({ error: "Filial topilmadi." }, { status: 404 });
+  if (branchError || !branch) return NextResponse.json({ error: "Ko'chma kutubxona topilmadi." }, { status: 404 });
 
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
     email: body.email.trim(),

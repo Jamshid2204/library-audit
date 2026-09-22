@@ -78,7 +78,7 @@ export default function DashboardPage() {
       const loadedVisits = (visitsResult.data ?? []) as DashboardVisit[];
       setReaders(readersWithDebt.slice(0, 5));
       setVisits(loadedVisits.slice(0, 5));
-      const branchRows = [{ id: "main", name: "Asosiy filial", branchId: null }, ...loadedBranches.map((branch) => ({ ...branch, branchId: branch.id }))];
+      const branchRows = [{ id: "main", name: "Asosiy kutubxona", branchId: null }, ...loadedBranches.map((branch) => ({ ...branch, branchId: branch.id }))];
       setBranchStats(branchRows.map((branch) => ({
         id: branch.id,
         name: branch.name,
@@ -213,7 +213,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="panel-card branch-statistics">
-        <div className="panel-header"><h3>Filiallar statistikasi</h3></div>
+        <div className="panel-header"><h3>Ko&apos;chma kutubxonalar statistikasi</h3></div>
         <div className="branch-stat-grid">
           {branchStats.map((branch) => <div className="branch-stat-card" key={branch.id}><strong>{branch.name}</strong><span>{branch.books} ta kitob</span><span>{branch.readers} ta kitobxon</span><span>{branch.loans} ta berilgan kitob</span></div>)}
         </div>
